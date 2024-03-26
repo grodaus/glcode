@@ -1,0 +1,14 @@
+name = "glcode"
+version = "1.0.0"
+description = "Gleam bindings to Erlang's code module"
+licences = ["Apache-2.0"]
+repository = { type = "github", user = "grodaus", repo = "glcode" }
+links = [{ title = "Website", href = "https://github.com/grodaus/glcode" }]
+
+[dependencies]
+gleam_stdlib = "~> 0.36"
+
+[dev-dependencies]
+showtime = "~> 0.3"
+erlfmt = "~> 1.3"
+pprint = "~> 1.0"
