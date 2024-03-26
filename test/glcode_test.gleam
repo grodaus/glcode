@@ -73,7 +73,7 @@ pub fn ensure_loaded() {
 pub fn get_object_code_test() {
   let glcode.Object(module, _binary, _filename) =
     glcode.get_object_code("erlfmt_format")
-    |> should.be_ok()
+    |> should.be_ok
   module
   |> should.equal("erlfmt_format")
 }
@@ -81,7 +81,7 @@ pub fn get_object_code_test() {
 pub fn load_binary_test() {
   let glcode.Object(module, binary, filename) =
     glcode.get_object_code("erlfmt_format")
-    |> should.be_ok()
+    |> should.be_ok
 
   glcode.load_binary(module, filename, binary)
   |> should.equal(Ok("erlfmt_format"))
@@ -94,12 +94,12 @@ pub fn purge_test() {
 
 pub fn atomic_load_test() {
   glcode.atomic_load([glcode.ModuleName("erlfmt_format")])
-  |> should.be_ok()
+  |> should.be_ok
 }
 
 pub fn prepare_loading_test() {
   glcode.prepare_loading([glcode.ModuleName("erlfmt_format")])
-  |> should.be_ok()
+  |> should.be_ok
 
   glcode.prepare_loading([glcode.ModuleName("foo")])
   |> should.be_error()
@@ -112,15 +112,15 @@ pub fn finish_loading_test() {
 
   let prepared =
     glcode.prepare_loading([glcode.ModuleName("erlfmt_format")])
-    |> should.be_ok()
+    |> should.be_ok
 
   glcode.finish_loading(prepared)
-  |> should.be_ok()
+  |> should.be_ok
 }
 
 pub fn ensure_modules_loaded_test() {
   glcode.ensure_modules_loaded(["code"])
-  |> should.be_ok()
+  |> should.be_ok
 }
 
 pub fn delete_test() {
@@ -133,18 +133,18 @@ pub fn delete_test() {
 
 pub fn soft_purge_test() {
   glcode.atomic_load([glcode.ModuleName("erlfmt_format")])
-  |> should.be_ok()
+  |> should.be_ok
 
   glcode.soft_purge("erlfmt_format")
   |> should.equal(True)
 }
 
 pub fn is_loaded_test() {
-  glcode.is_loaded("erlfmt_format")
-  |> should.be_ok()
+  glcode.is_loaded("code")
+  |> should.be_ok
 
   glcode.is_loaded("foo")
-  |> should.be_error()
+  |> should.be_error
 }
 
 pub fn all_available_test() {
@@ -156,7 +156,7 @@ pub fn all_available_test() {
 pub fn all_loaded_test() {
   {
     glcode.all_loaded()
-    |> list.length()
+    |> list.length
     > 0
   }
   |> should.equal(True)
@@ -178,11 +178,16 @@ pub fn root_dir_test() {
 
 pub fn lib_dir_test() {
   glcode.lib_dir()
+  |> string.length()
+  |> should.not_equal(0)
 }
 
+import pprint
+
 pub fn lib_dir_of_test() {
-  glcode.lib_dir_of("glcode")
-  |> should.be_ok()
+  glcode.lib_dir_of("mnesia")
+  |> pprint.debug
+  |> should.be_ok
 }
 
 pub fn lib_dir_of_sub_test() {

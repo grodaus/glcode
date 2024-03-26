@@ -3,6 +3,93 @@
 ////
 //// The runtime system can be started in interactive or embedded mode. Which
 //// one is decided by the command-line flag `-mode`:
+////
+////     erl -mode interactive
+////
+//// The modes are as follows:
+////
+//// * In interactive mode, which is default, only some code is loaded during
+////   system startup, basically the modules needed by the runtime system.
+////   Other code is dynamically loaded when first referenced. When a call to a
+////   function in a certain module is made, and the module is not loaded, the
+////   code server searches for and tries to load the module.
+////
+//// * In embedded mode, modules are not auto loaded. Trying to use a module
+////   that has not been loaded results in an error. This mode is recommended
+////   when the boot script loads all modules, as it is typically done in OTP
+////   releases. (Code can still be loaded later by explicitly ordering the code
+////   server to do so).
+////
+//// To prevent accidentally reloading of modules affecting the Erlang runtime
+//// system, directories `kernel`, `stdlib`, and `compiler` are considered
+//// *sticky*. This means that the system issues a warning and rejects the
+//// request if a user tries to reload a module residing in any of them. The
+//// feature can be disabled by using command-line flag `-nostick`.
+////
+//// ## Code Path
+////
+//// In interactive mode, the code server maintains a search path, usually
+//// called the code path, consisting of a list of directories, which it
+//// searches sequentially when trying to load a module.
+//// 
+//// Initially, the code path consists of the current working directory and
+//// all Erlang object code directories under library directory `$OTPROOT/lib`,
+//// where `$OTPROOT` is the installation directory of Erlang/OTP, `root_dir()`.
+//// Directories can be named `Name[-Vsn]` and the `code` server, by default,
+//// chooses the directory with the highest version number among those having
+//// the same Name. Suffix `-Vsn` is optional. If an ebin directory exists under
+//// `Name[-Vsn]`, this directory is added to the code path.
+//// 
+//// Environment variable `ERL_LIBS` (defined in the operating system) can be
+//// used to define more library directories to be handled in the same way as
+//// the standard OTP library directory described above, except that directories
+//// without an ebin directory are ignored.
+//// 
+//// All application directories found in the additional directories appear
+//// before the standard OTP applications, except for the Kernel and STDLIB
+//// applications, which are placed before any additional applications. In other
+//// words, modules found in any of the additional library directories override
+//// modules with the same name in OTP, except for modules in Kernel and STDLIB.
+//// 
+//// Environment variable `ERL_LIBS` (if defined) is to contain a
+//// colon-separated (for Unix-like systems) or semicolon-separated (for
+//// Windows) list of additional libraries.
+//// 
+//// ### Example:
+//// 
+//// On a Unix-like system, `ERL_LIBS` can be set to the following
+//// 
+////     /usr/local/jungerl:/home/some_user/my_erlang_lib
+////
+//// On Windows, use semi-colon as separator.
+//// 
+//// ## Current and Old Code
+////
+//// The code for a module can exist in two variants in a system: *current code*
+//// and *old code*. When a module is loaded into the system for the first time,
+//// the module code becomes 'current' and the global export table is updated
+//// with references to all functions exported from the module.
+//// 
+//// If then a new instance of the module is loaded (for example, because of
+//// error correction), the code of the previous instance becomes 'old', and all
+//// export entries referring to the previous instance are removed. After that,
+//// the new instance is loaded as for the first time, and becomes 'current'.
+//// 
+//// Both old and current code for a module are valid, and can even be evaluated
+//// concurrently. The difference is that exported functions in old code are
+//// unavailable. Hence, a global call cannot be made to an exported function
+//// in old code, but old code can still be evaluated because of processes
+//// lingering in it.
+//// 
+//// If a third instance of the module is loaded, the code server removes
+//// (purges) the old code and any processes lingering in it are terminated.
+//// Then the third instance becomes 'current' and the previously current code
+//// becomes 'old'.
+//// 
+//// For more information about old and current code, and how to make a
+//// process switch from old to current code, see section "Compilation and
+//// Code Loading" in the
+//// [Erlang Reference Manual](https://www.erlang.org/doc/reference_manual/code_loading).
 
 import gleam/dynamic.{type Dynamic}
 
@@ -71,9 +158,9 @@ pub fn append_paths(dirs: List(String)) -> Nil
 @external(erlang, "glcode_ffi", "add_pathsa")
 pub fn prepend_paths(dirs: List(String)) -> Nil
 
-/// Deletes a directory from the code path. The argument can be an atom Name,
-/// in which case the directory with the name .../Name[-Vsn][/ebin] is deleted
-/// from the code path. Also, the complete directory name Dir can be specified
+/// Deletes a directory from the code path. The argument can be a `Name`, in
+/// which case the directory with the name `.../Name[-Vsn][/ebin]` is deleted
+/// from the code path. Also, the complete directory `Path` can be specified
 /// as argument.
 @external(erlang, "glcode_ffi", "del_path")
 pub fn delete_path(dir: PathOrName) -> Result(Nil, DeletePathError)
@@ -110,14 +197,15 @@ pub type EnsureLoadedError {
   EnsureLoadedBadFile
   /// No file with object code was found.
   EnsureLoadedNoFile
-  /// The module has an -on_load function that failed when it was called.
+  /// The module has an `-on_load` function that failed when it was called.
   EnsureLoadedOnLoadFailure
 }
 
 /// Tries to load a module in the same way as `load_file`, unless the module is
 /// already loaded. However, in embedded mode it does not load a module that is
-/// not already loaded, but returns `Error(EnsureLoadedEmbedded)` instead. See
-/// [EnsureLoadedError](#EnsureLoadedError) for a description of other possible error reasons.
+/// not already loaded, but returns [`EnsureLoadedEmbedded`](#EnsureLoadedEmbedded)
+/// instead. See [`EnsureLoadedError`](#EnsureLoadedError) for a description of
+/// other possible error reasons.
 @external(erlang, "glcode_ffi", "ensure_loaded")
 pub fn ensure_loaded(module: String) -> Result(String, EnsureLoadedError)
 
@@ -156,7 +244,7 @@ pub type AtomicLoadError {
   AtomicLoadNotPurged(module: String)
   /// A module contains an -on_load function.
   AtomicLoadOnLoadNotAllowed(module: String)
-  /// A previously loaded module contains an -on_load function that never finished.
+  /// A previously loaded module contains an `-on_load` function that never finished.
   AtomicLoadPendingOnLoad(module: String)
   /// The object code resides in a sticky directory.
   AtomicLoadStickyDirectory(module: String)
@@ -167,6 +255,20 @@ pub type Module {
   ModuleObject(ObjectCode)
 }
 
+/// Tries to load all of the modules in the list `modules` atomically. That
+/// means that either all modules are loaded at the same time, or none of the
+/// modules are loaded if there is a problem with any of the modules.
+///
+/// If it is important to minimize the time that an application is inactive
+/// while changing code, use [`prepare_loading`](#prepare_loading) and
+/// [`finish_loading`](#finish_loading) instead of `atomic_load`. Here is an
+/// example:
+///
+///     let assert Ok(prepared) = glcode.prepare_loading(["module1", "module2"])
+///     // Put the application into an inactive state or do any other
+///     // preparation needed before changing the code.
+///     let assert Ok(Nil) = glcode.finish_loading(Prepared)
+///     // Resume the application.
 @external(erlang, "glcode_ffi", "atomic_load")
 pub fn atomic_load(modules: List(Module)) -> Result(Nil, List(AtomicLoadError))
 
@@ -179,31 +281,43 @@ pub fn purge(module: String) -> Bool
 pub opaque type Prepared
 
 pub type PrepareLoadingError {
-  /// The object code has an incorrect format or the module name in the object code is not the expected module name.
+  /// The object code has an incorrect format or the module name in the object
+  /// code is not the expected module name.
   PrepareLoadingBadFile(module: String)
   /// No file with object code exists.
   PrepareLoadingNoFile(module: String)
-  /// A module contains an -on_load function.
+  /// A module contains an `-on_load` function.
   PrepareLoadingOnLoadNotAllowed(module: String)
-  /// A module is included more than once in Modules.
+  /// A module is included more than once in `modules`.
   PrepareLoadingDuplicated(module: String)
 }
 
+/// Prepares to load the modules in the list `modules`. Finish the loading by
+/// calling [`finish_loading(prepared)`](#finish_loading).
 @external(erlang, "glcode_ffi", "prepare_loading")
 pub fn prepare_loading(
   modules: List(Module),
 ) -> Result(Prepared, List(PrepareLoadingError))
 
 pub type FinishLoadingError {
+  /// The object code cannot be loaded because an old version of the code
+  /// already exists.
   FinishLoadingNotPurged(module: String)
+  /// The object code resides in a sticky directory.
   FinishLoadingStickyDirectory(module: String)
+  /// A previously loaded module contains an `-on_load` function that never
+  /// finished.
   FinishLoadingPendingOnLoad(module: String)
 }
 
+/// Tries to load code for all modules that have been previously prepared
+/// by [`prepare_loading`](#prepare_loading). The loading occurs atomically,
+/// meaning that either all modules are loaded at the same time, or none of the
+/// modules are loaded.
 @external(erlang, "glcode_ffi", "finish_loading")
 pub fn finish_loading(
   prepared: Prepared,
-) -> Result(Prepared, List(FinishLoadingError))
+) -> Result(Nil, List(FinishLoadingError))
 
 pub type EnsureModulesLoadedError {
   EnsureModulesLoadedBadfile(module: String)
@@ -211,31 +325,45 @@ pub type EnsureModulesLoadedError {
   EnsureModulesLoadedOnLoadFailure(module: String)
 }
 
-/// Tries to load any modules not already loaded in the list Modules in the same way as load_file/1.
-/// Returns ok if successful, or {error,[{Module,Reason}]} if loading of some modules fails. See Error Reasons for Code-Loading Functions for a description of other possible error reasons.
+/// Tries to load any modules not already loaded in the list `modules` in the
+/// same way as [`load_file`](#load_file).
 @external(erlang, "glcode_ffi", "ensure_modules_loaded")
 pub fn ensure_modules_loaded(
   modules: List(String),
 ) -> Result(Nil, List(EnsureModulesLoadedError))
 
-/// Removes the current code for Module, that is, the current code for Module is made old. This means that processes can continue to execute the code in the module, but no external function calls can be made to it.
-/// Returns true if successful, or false if there is old code for Module that must be purged first, or if Module is not a (loaded) module.
+/// Removes the current code for `module`, that is, the current code for
+/// `module` is made old. This means that processes can continue to execute the
+/// code in the module, but no external function calls can be made to it.
+///
+/// Returns `True` if successful, or `False` if there is old code for `module`
+/// that must be purged first, or if `module` is not a (loaded) module.
 @external(erlang, "glcode_ffi", "delete")
 pub fn delete(module: String) -> Bool
 
-/// Purges the code for Module, that is, removes code marked as old, but only
-/// if no processes linger in it. Returns false if the module cannot be purged
-/// because of processes lingering in old code, otherwise true.
+/// Purges the code for `Module`, that is, removes code marked as old, but only
+/// if no processes linger in it. Returns `False` if the module cannot be purged
+/// because of processes lingering in old code, otherwise `True`.
 @external(erlang, "glcode_ffi", "soft_purge")
 pub fn soft_purge(module: String) -> Bool
 
+pub type IsLoaded {
+  IsLoaded(filename: String)
+  IsPreloaded
+  IsCoverCompiled
+}
+
 /// Checks if `module` is loaded. If it is, the loaded filename is returned,
 /// otherwise `Error(Nil)`.
-/// Normally, Loaded is the absolute filename Filename from which the code is
-/// obtained. If the module is preloaded (see script(4)), Loaded==preloaded. If
-/// the module is Cover-compiled (see cover(3)), Loaded==cover_compiled.
+/// Normally, `IsLoaded` contains the the absolute `filename` from which the code is
+/// obtained. If the module is preloaded (see
+/// [script(4)](https://www.erlang.org/doc/man/script)
+/// ), then it returns `IsPreloaded`. If
+/// the module is Cover-compiled (see
+/// [cover(3)](https://www.erlang.org/doc/man/cover)
+/// ), it returns `IsCoverCompiled`.
 @external(erlang, "glcode_ffi", "is_loaded")
-pub fn is_loaded(module: String) -> Result(String, Nil)
+pub fn is_loaded(module: String) -> Result(IsLoaded, Nil)
 
 pub type Available {
   /// `filename` is normally the absolute filename, as described for
@@ -270,12 +398,19 @@ pub type WhichError {
   WhichNonExisting
 }
 
-// If the module is not loaded, this function searches the code path for the first file containing object code for Module and returns the absolute filename.
-// If the module is loaded, it returns the name of the file containing the loaded object code.
-// If the module is preloaded, preloaded is returned.
-// If the module is Cover-compiled, cover_compiled is returned.
-// If the module cannot be found, non_existing is returned.
-
+/// If the module is not loaded, this function searches the code path for
+/// the first file containing object code for `module` and returns the absolute
+/// filename.
+///
+/// If the module is loaded, it returns the name of the file containing the
+/// loaded object code.
+///
+/// If the module is preloaded, `WhichPreloaded` is returned.
+///
+/// If the module is Cover-compiled, `WhichCoverCompiled` is returned.
+///
+/// If the module cannot be found, `WhichNonExisting` is returned.
+///
 @external(erlang, "glcode_ffi", "which")
 pub fn which(module: String) -> Result(Which, WhichError)
 
@@ -305,13 +440,13 @@ pub fn get_doc(module: String) -> Result(Dynamic, GetDocError)
 @external(erlang, "glcode_ffi", "root_dir")
 pub fn root_dir() -> String
 
-/// lib_dir() -> file:filename()
-/// Returns the library directory, $OTPROOT/lib, where $OTPROOT is the root directory of Erlang/OTP.
+/// Returns the library directory, `$OTPROOT/lib`, where `$OTPROOT` is the root
+/// directory of Erlang/OTP.
 ///
-/// Example:
+/// ### Example:
 ///
-/// > code:lib_dir().
-/// "/usr/local/otp/lib"
+///     glcode.lib_dir()
+///     "/nix/store/gnm9kc4qnayb7wbhmnsq0w6yqgh7xgn3-erlang-25.3.2.9/lib/erlang/lib"
 @external(erlang, "glcode_ffi", "lib_dir")
 pub fn lib_dir() -> String
 
@@ -319,30 +454,37 @@ pub type LibDirOfError {
   LibDirOfBadName
 }
 
-/// lib_dir(Name) -> file:filename() | {error, bad_name}
-/// Types
-/// Name = atom()
-/// Returns the path for the "library directory", the top directory, for an application Name located under $OTPROOT/lib or on a directory referred to with environment variable ERL_LIBS.
+/// Returns the path for the "library directory", the top directory, for an
+/// application Name located under `$OTPROOT/lib` or on a directory referred to
+/// with environment variable `ERL_LIBS`.
 ///
-/// If a regular directory called Name or Name-Vsn exists in the code path with an ebin subdirectory, the path to this directory is returned (not the ebin directory).
+/// If a regular directory called `name` or `name-Vsn` exists in the code
+/// path with an `ebin` subdirectory, the path to this directory is returned
+/// (not the ebin directory).
+/// If the directory refers to a directory in an archive, the archive name is
+/// stripped away before the path is returned. For example, if directory `/usr/
+/// local/otp/lib/mnesia-4.2.2.ez/mnesia-4.2.2/ebin` is in the path, `/usr/local/
+/// otp/lib/mnesia-4.2.2/ebin` is returned. This means that the library directory
+/// for an application is the same, regardless if the application resides in an
+/// archive or not.
 ///
-/// If the directory refers to a directory in an archive, the archive name is stripped away before the path is returned. For example, if directory /usr/local/otp/lib/mnesia-4.2.2.ez/mnesia-4.2.2/ebin is in the path, /usr/local/otp/lib/mnesia-4.2.2/ebin is returned. This means that the library directory for an application is the same, regardless if the application resides in an archive or not.
+/// ### Example:
 ///
-/// Example:
+///     > glcode.lib_dir("mnesia")
+///     "/nix/store/gnm9kc4qnayb7wbhmnsq0w6yqgh7xgn3-erlang-25.3.2.9/lib/erlang/lib/mnesia-4.21.4.2"
 ///
-/// > code:lib_dir(mnesia).
-/// "/usr/local/otp/lib/mnesia-4.2.2"
-/// Returns {error, bad_name} if Name is not the name of an application under $OTPROOT/lib or on a directory referred to through environment variable ERL_LIBS. Fails with an exception if Name has the wrong type.
+/// Returns an error if `name` is not the name of an application under
+/// `$OTPROOT/lib` or on a directory referred to through environment variable
+/// `ERL_LIBS`.
 @external(erlang, "glcode_ffi", "lib_dir")
-pub fn lib_dir_of(module: String) -> Result(String, LibDirOfError)
+pub fn lib_dir_of(name: String) -> Result(String, LibDirOfError)
 
 /// Returns the path to a subdirectory directly under the top directory of an application. Normally the subdirectories reside under the top directory for the application, but when applications at least partly reside in an archive, the situation is different. Some of the subdirectories can reside as regular directories while others reside in an archive file. It is not checked whether this directory exists.
 ///
 /// Example:
 ///
-/// > code:lib_dir(megaco, priv).
-/// "/usr/local/otp/lib/megaco-3.9.1.1/priv"
-/// Fails with an exception if Name or SubDir has the wrong type.
+///     > glcode.lib_dir("megaco", "priv").
+///     "/usr/local/otp/lib/megaco-3.9.1.1/priv"
 @external(erlang, "glcode_ffi", "lib_dir")
 pub fn lib_dir_of_sub(
   module: String,
@@ -358,84 +500,64 @@ pub fn compiler_dir() -> String
 @external(erlang, "glcode_ffi", "priv_dir")
 pub fn priv_dir(name: String) -> Result(Nil, String)
 
-/// objfile_extension() -> nonempty_string()
 /// Returns the object code file extension corresponding to the Erlang machine
-/// used, namely .beam.
+/// used, namely `.beam`.
 @external(erlang, "glcode_ffi", "objfile_extension")
 pub fn objfile_extension() -> String
 
-/// Marks Dir as sticky.
-/// Returns ok if successful, otherwise error.
+/// Marks `dir` as sticky.
 @external(erlang, "glcode_ffi", "stick_dir")
 pub fn stick_dir(dir: String) -> Result(Nil, Nil)
 
 /// Unsticks a directory that is marked as sticky.
-/// Returns ok if successful, otherwise error.
 @external(erlang, "glcode_ffi", "unstick_dir")
 pub fn unstick_dir(dir: String) -> Result(Nil, Nil)
 
-/// Returns true if Module is the name of a module that has been loaded from
+/// Returns `True` if `module` is the name of a module that has been loaded from
 /// a sticky directory (in other words: an attempt to reload the module will
-/// fail), or false if Module is not a loaded module or is not sticky.
+/// fail), or `False` if `module` is not a loaded module or is not sticky.
 @external(erlang, "glcode_ffi", "is_sticky")
 pub fn is_sticky(module: String) -> Bool
 
 pub type WhereIsFileError {
+  /// is returned if the file cannot be found
   WhereIsFileNonExisting
 }
 
-/// Searches the code path for Filename, a file of arbitrary type. If found, the
-/// full name is returned. non_existing is returned if the file cannot be found.
-/// The function can be useful, for example, to locate application resource
-/// files.
+/// Searches the code path for `filename`, a file of arbitrary type. If found,
+/// the full name is returned. The function can be useful, for example, to
+/// locate application resource files.
 @external(erlang, "glcode_ffi", "where_is_file")
 pub fn where_is_file(filename: String) -> Result(String, WhereIsFileError)
 
 /// Searches all directories in the code path for module names with identical
-/// names and writes a report to stdout.
+/// names and writes a report to `stdout`.
 @external(erlang, "glcode_ffi", "clash")
 pub fn clash() -> Nil
 
 pub type ModuleStatus {
+  /// If `module` is not currently loaded
   ModuleStatusNotLoaded(module: String)
+  /// If `module` is loaded and the object file exists and contains the same code
   ModuleStatusLoaded(module: String)
+  /// If `module` is loaded but no corresponding object file can be found in the code path
   ModuleStatusRemoved(module: String)
+  /// If `module` is loaded but the object file contains code with a different MD5 checksum
   ModuleStatusModified(module: String)
 }
 
-// module_status() -> [{module(), module_status()}]
-// OTP 23.0
-// Types
-// module_status() = not_loaded | loaded | modified | removed
-// See module_status/1 and all_loaded/0 for details.
-
-// module_status(Module :: module() | [module()]) ->
-//                  module_status() | [{module(), module_status()}]
-// OTP 20.0
-// Types
-// module_status() = not_loaded | loaded | modified | removed
-// The status of a module can be one of:
-
-// not_loaded
-// If Module is not currently loaded.
-
-// loaded
-// If Module is loaded and the object file exists and contains the same code.
-
-// removed
-// If Module is loaded but no corresponding object file can be found in the code path.
-
-// modified
-// If Module is loaded but the object file contains code with a different MD5 checksum.
-
-// Preloaded modules are always reported as loaded, without inspecting the contents on disk. Cover compiled modules will always be reported as modified if an object file exists, or as removed otherwise. Modules whose load path is an empty string (which is the convention for auto-generated code) will only be reported as loaded or not_loaded.
-
-// See also modified_modules/0.
+// See also [modified_modules](#modified_modules).
+/// Preloaded modules are always reported as loaded, without inspecting the
+/// contents on disk. Cover compiled modules will always be reported as modified
+/// if an object file exists, or as removed otherwise. Modules whose load path
+/// is an empty string (which is the convention for auto-generated code) will
+/// only be reported as Loaded or NotLoaded.
 @external(erlang, "glcode_ffi", "module_status")
 pub fn module_status(modules: List(String)) -> List(ModuleStatus)
 
-/// Returns the list of all currently loaded modules for which module_status/1
-/// returns modified. See also `all_loaded`.
+/// Returns the list of all currently loaded modules for which
+/// [`module_status`](#module_status)
+/// returns modified. See also [`all_loaded`](#all_loaded).
 @external(erlang, "glcode_ffi", "modified_modules")
 pub fn modified_modules() -> List(ModuleStatus)
 
@@ -448,6 +570,7 @@ pub type Mode {
 /// embedded. This information is useful when an external entity (for example,
 /// an IDE) provides additional code for a running node. If the code server is
 /// in interactive mode, it only has to add the path to the code. If the code
-/// server is in embedded mode, the code must be loaded with `load_binary`.
+/// server is in embedded mode, the code must be loaded with
+/// [`load_binary`](#load_binary).
 @external(erlang, "code", "get_mode")
 pub fn get_mode() -> Mode

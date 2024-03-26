@@ -36,7 +36,7 @@
     where_is_file/1,
     clash/0,
     module_status/1,
-modified_modules/0
+    modified_modules/0
 ]).
 
 add_pathz(Dir) ->
@@ -233,6 +233,8 @@ soft_purge(Module) ->
 
 is_loaded(Module) ->
     case code:is_loaded(erlang:binary_to_atom(Module)) of
+        cover_compiled -> {ok, is_cover_compiled};
+        preloaded -> {ok, is_preloaded};
         {file, Filename} -> {ok, erlang:list_to_binary(Filename)};
         false -> {error, nil}
     end.
@@ -247,7 +249,6 @@ map_all_available({Module, Filename, Loaded}) ->
         preloaded -> {available_preloaded, Module_, Loaded};
         Filename -> {available, Module_, erlang:list_to_binary(Filename), Loaded}
     end.
-    
 
 all_loaded() ->
     lists:map(fun map_all_loaded/1, code:all_loaded()).
@@ -337,7 +338,8 @@ clash() ->
     end.
 
 module_status(Modules) ->
-    lists:map(fun map_module_status/1, code:module_status(lists:map(fun erlang:binary_to_atom/1, Modules))).
+    Status = code:module_status(lists:map(fun erlang:binary_to_atom/1, Modules)),
+    lists:map(fun map_module_status/1, Status).
 
 map_module_status({Name, Status}) ->
     Name_ = erlang:atom_to_binary(Name),
