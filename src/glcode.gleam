@@ -420,6 +420,34 @@ pub type GetDocError {
   GetDocPosix(error: String)
 }
 
+pub type Anno {
+  Anno(file: String, location: Int)
+  AnnoNone
+}
+
+import gleam/dict
+
+pub type ModuleDoc {
+  ModuleDocNone
+  ModuleDocHidden
+  ModuleDoc(dict.Dict(String, Dynamic))
+}
+
+pub type MetadataValue {
+  OtpDocVsn(Int, Int, Int)
+}
+
+pub type DocsV1 {
+  DocsV1(
+    anno: Anno,
+    beam_language: String,
+    format: String,
+    module_doc: ModuleDoc,
+    metadata: dict.Dict(String, MetadataValue),
+    docs: List(String),
+  )
+}
+
 /// Searches the code path for EEP-48 style documentation and returns it if
 /// available. If no documentation can be found the function tries to generate
 /// documentation from the debug information in the module.
@@ -430,7 +458,7 @@ pub type GetDocError {
 /// For now this returns a dynamic value since coming up with a sensible Gleam
 /// type for it is crazy.
 @external(erlang, "glcode_ffi", "get_doc")
-pub fn get_doc(module: String) -> Result(Dynamic, GetDocError)
+pub fn get_doc(module: String) -> Result(DocsV1, GetDocError)
 
 /// root_dir() -> file:filename()
 /// Returns the root directory of Erlang/OTP, which is the directory where it is installed.

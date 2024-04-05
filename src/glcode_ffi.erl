@@ -272,7 +272,7 @@ which(Module) ->
 get_doc(Module) ->
     case code:get_doc(erlang:binary_to_atom(Module)) of
         {ok, Res} ->
-            {ok, Res};
+            {ok, convert_docs_v1(Res)};
         {error, Reason} ->
             case Reason of
                 non_existing -> {error, get_doc_non_existing};
@@ -280,6 +280,59 @@ get_doc(Module) ->
                 Posix -> {error, {get_doc_posix, erlang:atom_to_binary(Posix)}}
             end
     end.
+
+convert_docs_v1({docs_v1, Anno, BeamLanguage, Format, ModuleDoc, Metadata, Docs}) ->
+    {
+        docs_v1,
+        convert_docs_v1_anno(Anno),
+        convert_docs_v1_beam_language(BeamLanguage),
+        convert_docs_v1_beam_format(Format),
+        convert_docs_v1_beam_module_doc(ModuleDoc),
+        convert_docs_v1_beam_module_metadata(Metadata),
+        Docs
+    }.
+
+convert_docs_v1_anno(Anno) ->
+    case Anno of
+        [{file, File}, {location, Line}] -> {anno, erlang:list_to_binary(File), Line};
+        0 -> anno_none
+    end.
+
+convert_docs_v1_beam_language(BeamLanguage) ->
+    case BeamLanguage of
+        V when is_atom(V) -> erlang:atom_to_binary(V);
+        V when is_binary(V) -> V
+    end.
+
+convert_docs_v1_beam_format(Format) ->
+    case Format of
+        hidden -> <<"hidden">>;
+        V when is_binary(V) -> V;
+        V when is_atom(V) -> erlang:atom_to_binary(V)
+    end.
+
+convert_docs_v1_beam_module_doc(ModuleDoc) ->
+    case ModuleDoc of
+        hidden -> module_doc_hidden;
+        none -> module_doc_none;
+        {Lang, Doc} -> {module_doc, Lang, Doc};
+        Doc -> {module_doc, Doc}
+    end.
+
+convert_docs_v1_beam_module_metadata(Metadata) ->
+    Fun = fun(Key, Value, Sum) ->
+        Value_ =
+            case {Key, Value} of
+                {otp_doc_vsn, {A, B, C}} when is_tuple(Value) -> {Key, A, B, C};
+                {_, _} when is_binary(Value) -> Value;
+                {source, _} -> erlang:list_to_binary(Value);
+                {generated, _} -> Value;
+                {since, _} -> erlang:list_to_binary(Value);
+                _ -> Value
+            end,
+        maps:put(erlang:atom_to_binary(Key), Value_, Sum)
+    end,
+    maps:fold(Fun, maps:new(), Metadata).
 
 root_dir() ->
     erlang:list_to_binary(code:root_dir()).

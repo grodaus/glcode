@@ -167,9 +167,60 @@ pub fn which_test() {
   |> should.be_ok
 }
 
+import pprint
+import gleam/dict
+
 pub fn get_doc_test() {
-  glcode.get_doc("code")
-  |> should.be_ok
+  glcode.all_available()
+  |> list.each(fn(available) {
+    let doc =
+      glcode.get_doc(available.module)
+      |> should.be_ok
+
+    case doc.anno {
+      glcode.Anno(file, location) -> {
+        file
+        |> string.length
+        |> should.not_equal(0)
+
+        location
+        |> should.equal(0)
+      }
+      glcode.AnnoNone -> Nil
+    }
+
+    doc.beam_language
+    |> should.equal("erlang")
+
+    doc.format
+    |> should.equal("application/erlang+html")
+
+    case doc.module_doc {
+      glcode.ModuleDoc(doc) ->
+        doc
+        |> dict.keys()
+        |> should.equal(["en"])
+      glcode.ModuleDocHidden -> Nil
+      glcode.ModuleDocNone -> Nil
+    }
+
+    doc.metadata
+    |> dict.keys()
+    |> list.each(fn(k) {
+      case k {
+        "otp_doc_vsn" | "source" | "name" | "generated" | "since" -> Nil
+        _ -> {
+          // pprint.debug(k)
+          // pprint.debug(dict.get(doc.metadata, k))
+          Nil
+        }
+      }
+    })
+  })
+  // |> should.equal(
+  //   dict.new()
+  //   |> dict.insert("otp_doc_vsn", glcode.OtpDocVsn(1, 0, 0)),
+  // )
 }
 
 pub fn root_dir_test() {
@@ -182,11 +233,8 @@ pub fn lib_dir_test() {
   |> should.not_equal(0)
 }
 
-import pprint
-
 pub fn lib_dir_of_test() {
   glcode.lib_dir_of("mnesia")
-  |> pprint.debug
   |> should.be_ok
 }
 
