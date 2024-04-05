@@ -559,7 +559,7 @@ pub fn module_status(modules: List(String)) -> List(ModuleStatus)
 /// [`module_status`](#module_status)
 /// returns modified. See also [`all_loaded`](#all_loaded).
 @external(erlang, "glcode_ffi", "modified_modules")
-pub fn modified_modules() -> List(ModuleStatus)
+pub fn modified_modules() -> List(Module)
 
 pub type Mode {
   Interactive

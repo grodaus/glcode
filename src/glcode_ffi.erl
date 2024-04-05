@@ -352,4 +352,8 @@ map_module_status({Name, Status}) ->
     end.
 
 modified_modules() ->
-    code:modified_modules().
+    lists:map(fun convert_modified_module/1, code:modified_modules()).
+
+convert_modified_module(Module) ->
+    Name = erlang:atom_to_binary(Module),
+    {module_name, Name}.
